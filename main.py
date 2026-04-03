@@ -1,19 +1,18 @@
 import os
-import time
 from dotenv import load_dotenv
-from google import genai
+from groq import Groq
 from tools import search_movies, search_music
 
 load_dotenv()
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-def call_gemini(prompt: str) -> str:
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt
+def call_llm(prompt: str) -> str:
+    response = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[{"role": "user", "content": prompt}]
     )
-    return response.text
+    return response.choices[0].message.content
 
 def run_entertainment_agent(user_input: str):
     print("\n" + "="*50)
@@ -30,10 +29,8 @@ def run_entertainment_agent(user_input: str):
     Give a short friendly recommendation with reasons why each movie fits.
     Be brief and to the point.
     """
-    movie_result = call_gemini(movie_prompt)
-    print("✅ Movie Agent done!")
-    print("⏳ Waiting 60 seconds before Music Agent...\n")
-    time.sleep(60)
+    movie_result = call_llm(movie_prompt)
+    print("✅ Movie Agent done!\n")
 
     # --- Agent 2: Music Expert ---
     print("🎵 Music Agent is working...")
@@ -44,10 +41,8 @@ def run_entertainment_agent(user_input: str):
     Suggest these songs briefly and explain why each fits the mood.
     Be brief and to the point.
     """
-    music_result = call_gemini(music_prompt)
-    print("✅ Music Agent done!")
-    print("⏳ Waiting 60 seconds before Planner Agent...\n")
-    time.sleep(60)
+    music_result = call_llm(music_prompt)
+    print("✅ Music Agent done!\n")
 
     # --- Agent 3: Entertainment Planner ---
     print("📋 Planner Agent is working...")
@@ -63,7 +58,7 @@ def run_entertainment_agent(user_input: str):
     - 🎵 Music Playlist section
     - A fun closing line
     """
-    final_plan = call_gemini(plan_prompt)
+    final_plan = call_llm(plan_prompt)
     print("✅ Planner Agent done!\n")
 
     print("\n" + "="*50)

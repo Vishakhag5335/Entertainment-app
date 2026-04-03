@@ -4,3 +4,5 @@ google-generativeai
 langchain-google-genai
 python-dotenv
 google-genai
+groq
+requests
