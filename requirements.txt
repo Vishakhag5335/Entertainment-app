@@ -1,10 +1,4 @@
-crewai
-crewai-tools
-google-generativeai
-langchain-google-genai
-python-dotenv
-google-genai
+flask
 groq
 requests
-fastapi uvicorn[standard]
-flask
+python-dotenv

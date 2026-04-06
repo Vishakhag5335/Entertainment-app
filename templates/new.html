@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EntertainmentAI — Your Personal Planner</title>
+  <meta name="description" content="AI-powered entertainment planner. Get personalized movie and music recommendations curated just for you." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg: #080808;
+      --surface: #0e0e0e;
+      --surface2: #141414;
+      --gold: #c8a96e;
+      --gold-bright: #dbbe85;
+      --gold-dim: #8a6f42;
+      --gold-glow: rgba(200, 169, 110, 0.12);
+      --text: #e8e0d0;
+      --text-secondary: #b0a898;
+      --text-muted: #504840;
+      --border: rgba(200, 169, 110, 0.09);
+      --border-hover: rgba(200, 169, 110, 0.22);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      position: relative;
+    }
+
+    /* Film grain */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      opacity: 0.3;
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    /* Vignette */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 25% 50%, rgba(200,169,110,0.03) 0%, transparent 60%),
+        radial-gradient(ellipse 120% 90% at 50% 100%, rgba(0,0,0,0.6) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Scanlines */
+    .scanlines {
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(to bottom, transparent, transparent 2px, rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px);
+      pointer-events: none; z-index: 2;
+    }
+
+    /* Particles */
+    .particles { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+    .particle {
+      position: absolute; width: 2px; height: 2px;
+      background: var(--gold); border-radius: 50%;
+      opacity: 0; animation: float-up linear infinite;
+    }
+
+    /* ═══════════════════  SPLIT LAYOUT  ═══════════════════ */
+    .split {
+      position: relative; z-index: 10;
+      display: flex; width: 100%; height: 100vh;
+    }
+
+    /* ── LEFT ── */
+    .left {
+      flex: 1;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 3rem 3.5rem;
+      position: relative;
+    }
+
+    .left::after {
+      content: '';
+      position: absolute; top: 12%; bottom: 12%; right: 0;
+      width: 1px;
+      background: linear-gradient(180deg, transparent, var(--gold-dim), transparent);
+      opacity: 0.25;
+    }
+
+    .branding {
+      max-width: 400px;
+      animation: fadeRight 0.8s ease both;
+    }
+
+    .logo-mark {
+      display: inline-flex; align-items: center; gap: 0.6rem;
+      margin-bottom: 2.2rem;
+    }
+
+    .logo-bar {
+      width: 32px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+      opacity: 0.45;
+    }
+
+    .logo-text {
+      font-size: 0.58rem; letter-spacing: 0.45em; text-transform: uppercase;
+      color: var(--gold); font-family: 'DM Mono', monospace; font-weight: 300;
+    }
+
+    h1 {
+      font-size: clamp(2.2rem, 4.5vw, 3.8rem);
+      font-weight: 300; line-height: 1.08;
+      letter-spacing: -0.01em; color: var(--text);
+      margin-bottom: 1.2rem;
+    }
+
+    h1 em {
+      font-style: italic; color: var(--gold);
+      text-shadow: 0 0 40px rgba(200,169,110,0.12);
+    }
+
+    .subtitle {
+      font-size: 1rem; font-weight: 300;
+      color: var(--text-muted); letter-spacing: 0.02em;
+      font-style: italic; line-height: 1.65;
+    }
+
+    .brand-accent {
+      display: flex; align-items: center; gap: 0.8rem;
+      margin-top: 2.2rem; opacity: 0.45;
+    }
+    .brand-accent-line { width: 36px; height: 1px; background: var(--gold-dim); }
+    .brand-accent-icon { font-size: 0.7rem; color: var(--gold-dim); animation: twinkle 3s ease-in-out infinite; }
+
+    /* ── RIGHT ── */
+    .right {
+      flex: 1;
+      display: flex; align-items: center; justify-content: center;
+      padding: 2.5rem;
+    }
+
+    .form-wrap {
+      width: 100%; max-width: 460px;
+      display: flex; flex-direction: column; gap: 1.6rem;
+      animation: fadeLeft 0.9s 0.15s ease both;
+    }
+
+    /* ── SECTION BLOCKS ── */
+    .form-section {
+      display: flex; flex-direction: column; gap: 0.65rem;
+    }
+
+    .form-label {
+      font-size: 0.58rem; font-weight: 400;
+      letter-spacing: 0.35em; text-transform: uppercase;
+      color: var(--text-muted); font-family: 'DM Mono', monospace;
+    }
+
+    /* ── INTENT PILLS ── */
+    .intent-pills { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+
+    .pill {
+      padding: 0.48rem 0.95rem;
+      font-family: 'DM Mono', monospace; font-size: 0.64rem; font-weight: 300;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      cursor: pointer; border: 1px solid var(--border); background: transparent;
+      color: var(--text-muted); transition: all 0.25s ease;
+      display: flex; align-items: center; gap: 0.3rem;
+    }
+    .pill:hover { border-color: var(--border-hover); color: var(--text-secondary); background: rgba(200,169,110,0.03); }
+    .pill.active { background: rgba(200,169,110,0.10); color: var(--gold); border-color: var(--gold-dim); }
+    .pill-icon { font-size: 0.75rem; }
+
+    /* ── DIVIDER ── */
+    .sep {
+      height: 1px;
+      background: linear-gradient(90deg, var(--border), rgba(200,169,110,0.06), var(--border));
+    }
+
+    /* ── TEXTAREA ── */
+    .input-area {
+      width: 100%;
+      min-height: 110px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.05rem; font-weight: 300;
+      padding: 1rem 1.2rem;
+      outline: none; resize: none;
+      line-height: 1.65; letter-spacing: 0.01em;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .input-area::placeholder { color: var(--text-muted); font-style: italic; }
+    .input-area:focus { border-color: var(--gold-dim); box-shadow: 0 0 0 1px var(--gold-dim) inset, 0 0 24px var(--gold-glow); }
+
+    /* ── QUICK PICKS ── */
+    .quick-picks {
+      display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
+    }
+
+    .quick-label {
+      font-size: 0.55rem; color: var(--text-muted);
+      font-family: 'DM Mono', monospace; letter-spacing: 0.18em;
+      text-transform: uppercase; margin-right: 0.2rem;
+    }
+
+    .chip {
+      font-size: 0.64rem; padding: 0.28rem 0.65rem;
+      border: 1px solid var(--border); background: transparent;
+      color: var(--text-muted); cursor: pointer;
+      font-family: 'DM Mono', monospace; font-weight: 300;
+      letter-spacing: 0.02em; transition: all 0.2s;
+    }
+    .chip:hover { border-color: var(--gold-dim); color: var(--gold); background: rgba(200,169,110,0.04); }
+
+    /* ── SUBMIT BUTTON ── */
+    .btn-submit {
+      width: 100%;
+      background: var(--gold); border: none;
+      color: #0a0a0a;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem; font-weight: 400;
+      letter-spacing: 0.28em; text-transform: uppercase;
+      padding: 1rem 1.8rem;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 0.6rem;
+      transition: background 0.25s, transform 0.15s, box-shadow 0.3s;
+    }
+    .btn-submit:hover { background: var(--gold-bright); box-shadow: 0 0 28px rgba(200,169,110,0.18); }
+    .btn-submit:active { transform: scale(0.98); }
+    .btn-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-arrow { font-size: 1rem; transition: transform 0.2s; }
+    .btn-submit:hover .btn-arrow { transform: translateX(3px); }
+
+    /* ── FOOTER ── */
+    .form-footer {
+      text-align: center;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.5rem; letter-spacing: 0.28em;
+      color: var(--text-muted); text-transform: uppercase;
+      opacity: 0.5;
+    }
+
+    /* ═══════════════════  ANIMATIONS  ═══════════════════ */
+    @keyframes fadeRight {
+      from { opacity: 0; transform: translateX(-25px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes fadeLeft {
+      from { opacity: 0; transform: translateX(25px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes twinkle {
+      0%, 100% { opacity: 0.35; }
+      50%      { opacity: 1; }
+    }
+    @keyframes float-up {
+      0%   { transform: translateY(100vh) scale(0); opacity: 0; }
+      10%  { opacity: 0.5; }
+      90%  { opacity: 0.08; }
+      100% { transform: translateY(-10vh) scale(1); opacity: 0; }
+    }
+
+    /* ═══════════════════  RESPONSIVE  ═══════════════════ */
+    @media (max-width: 900px) {
+      html, body { overflow: auto; }
+      .split { flex-direction: column; height: auto; min-height: 100vh; }
+      .left { padding: 3rem 2rem 2rem; flex: none; }
+      .left::after { display: none; }
+      .branding { text-align: center; }
+      .brand-accent { justify-content: center; }
+      .right { padding: 0 1.5rem 3rem; flex: none; }
+      .form-wrap { max-width: 100%; }
+      h1 { font-size: 2.2rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="scanlines"></div>
+  <div class="particles" id="particles"></div>
+
+  <div class="split">
+    <!-- ── LEFT — Branding ── -->
+    <div class="left">
+      <div class="branding">
+        <div class="logo-mark">
+          <span class="logo-bar"></span>
+          <span class="logo-text">Entertainment AI</span>
+          <span class="logo-bar"></span>
+        </div>
+        <h1>What's Your<br><em>Mood</em> Tonight?</h1>
+        <p class="subtitle">Describe your vibe — three AI agents will curate a personalized plan</p>
+        <div class="brand-accent">
+          <span class="brand-accent-line"></span>
+          <span class="brand-accent-icon">✦</span>
+          <span class="brand-accent-line"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── RIGHT — Form ── -->
+    <div class="right">
+      <div class="form-wrap">
+
+        <!-- 1. Intent -->
+        <div class="form-section">
+          <div class="form-label">I'm looking for</div>
+          <div class="intent-pills">
+            <button class="pill active" data-intent="both" id="pill-both">
+              <span class="pill-icon">✦</span> Movies & Music
+            </button>
+            <button class="pill" data-intent="movies" id="pill-movies">
+              <span class="pill-icon">🎬</span> Movies Only
+            </button>
+            <button class="pill" data-intent="music" id="pill-music">
+              <span class="pill-icon">🎵</span> Music Only
+            </button>
+          </div>
+        </div>
+
+        <div class="sep"></div>
+
+        <!-- 2. Query -->
+        <div class="form-section">
+          <div class="form-label">Describe what you want</div>
+          <textarea
+            class="input-area"
+            id="query"
+            placeholder="e.g. A quiet rainy Sunday — cozy, melancholy, a slow-burn drama with ambient music…"
+          ></textarea>
+          <div class="quick-picks">
+            <span class="quick-label">Try:</span>
+            <button class="chip" data-fill="romantic dinner evening">romantic dinner</button>
+            <button class="chip" data-fill="sci-fi thriller weekend">sci-fi thriller</button>
+            <button class="chip" data-fill="upbeat summer road trip">road trip</button>
+            <button class="chip" data-fill="cozy horror night">horror night</button>
+          </div>
+        </div>
+
+        <div class="sep"></div>
+
+        <!-- 3. Submit -->
+        <button class="btn-submit" id="btn-submit">
+          Plan It <span class="btn-arrow">→</span>
+        </button>
+
+        <div class="form-footer">
+          Powered by CrewAI · Groq · Serper
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let selectedIntent = 'both';
+
+    document.querySelectorAll('.pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        selectedIntent = pill.dataset.intent;
+      });
+    });
+
+    document.querySelectorAll('.chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        document.getElementById('query').value = chip.dataset.fill;
+        document.getElementById('query').focus();
+      });
+    });
+
+    document.getElementById('query').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submit();
+    });
+
+    document.getElementById('btn-submit').addEventListener('click', submit);
+
+    async function submit() {
+      const query = document.getElementById('query').value.trim();
+      if (!query) { document.getElementById('query').focus(); return; }
+
+      const btn = document.getElementById('btn-submit');
+      btn.disabled = true;
+      btn.innerHTML = '<span style="letter-spacing:0.25em">CURATING</span> <span class="btn-arrow" style="animation:twinkle 1s ease-in-out infinite">✦</span>';
+
+      try {
+        const res = await fetch('/api/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query, intent: selectedIntent }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+        window.location.href = `/results/${data.id}`;
+      } catch (err) {
+        showErr(err.message);
+        btn.disabled = false;
+        btn.innerHTML = 'Plan It <span class="btn-arrow">→</span>';
+      }
+    }
+
+    function showErr(msg) {
+      const old = document.getElementById('inline-error');
+      if (old) old.remove();
+      const d = document.createElement('div');
+      d.id = 'inline-error';
+      d.style.cssText = 'background:rgba(192,57,43,0.07);border:1px solid rgba(192,57,43,0.22);padding:0.7rem 1rem;font-family:"DM Mono",monospace;font-size:0.75rem;color:#e07060;animation:fadeUp 0.3s ease both;';
+      d.textContent = '⚠ ' + msg;
+      document.querySelector('.form-wrap').insertBefore(d, document.querySelector('.btn-submit'));
+    }
+
+    (function particles() {
+      const c = document.getElementById('particles');
+      for (let i = 0; i < 18; i++) {
+        const p = document.createElement('div');
+        p.classList.add('particle');
+        p.style.left = Math.random() * 100 + '%';
+        p.style.animationDuration = (14 + Math.random() * 18) + 's';
+        p.style.animationDelay = Math.random() * 14 + 's';
+        p.style.width = p.style.height = (1 + Math.random() * 1.5) + 'px';
+        c.appendChild(p);
+      }
+    })();
+  </script>
+</body>
+</html>
