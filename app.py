@@ -147,6 +147,17 @@ def get_history():
     return jsonify(history_list)
 
 
+@app.route("/api/history/<plan_id>", methods=["DELETE"])
+def delete_history_item(plan_id: str):
+    """Delete a specific curation from the results_store."""
+    with _lock:
+        if plan_id in results_store:
+            del results_store[plan_id]
+            _save_store()
+            return jsonify({"status": "ok"})
+    return jsonify({"error": "Item not found"}), 404
+
+
 # ── Background worker ──────────────────────────────────────────────────────────
 
 def _process(plan_id: str, query: str, intent: str) -> None:
