@@ -4,20 +4,32 @@ Run: python app.py
 Opens at http://localhost:5000  (redirects to /new)
 """
 
+import json
+import logging
 import os
 import sys
-import uuid
-import json
 import threading
 import time
+import uuid
 from pathlib import Path
-from flask import Flask, request, jsonify, render_template, redirect
-from dotenv import load_dotenv
-from agents import run_plan
 
-load_dotenv()
+from flask import Flask, jsonify, redirect, render_template, request
+from flask_cors import CORS
+from dotenv import find_dotenv, load_dotenv
+
+from agents import run_plan
+from tmdb_service import build_movie_cards_html
+
+load_dotenv(find_dotenv())
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+CORS(app)
 
 # ── Persistent JSON-backed store ───────────────────────────────────────────────
 # Stores plan results in data/results.json so they survive server restarts.
@@ -121,6 +133,21 @@ def get_result(plan_id: str):
     return jsonify(entry)
 
 
+@app.route("/api/debug/groq")
+def debug_groq():
+    """Return basic Groq client and environment status for debugging."""
+    try:
+        from agents import _client, _client_error
+    except Exception as exc:  # pragma: no cover - defensive
+        return jsonify({"error": f"Failed importing agents: {exc}"}), 500
+
+    return jsonify({
+        "GROQ_API_KEY_set": bool(os.getenv("GROQ_API_KEY")),
+        "_client": type(_client).__name__ if _client else None,
+        "_client_error": str(_client_error) if _client_error else None,
+    })
+
+
 @app.route("/api/history", methods=["GET", "DELETE"])
 def get_history():
     """Return all past curations from results_store, or clear them."""
@@ -163,10 +190,18 @@ def delete_history_item(plan_id: str):
 def _process(plan_id: str, query: str, intent: str) -> None:
     try:
         result = run_plan(query, intent)
+        if intent in ("movies", "both") and result.get("movies"):
+            try:
+                result["movies_html"] = build_movie_cards_html(result["movies"])
+            except Exception as exc:
+                logger.warning("TMDb enrichment failed: %s", exc)
+                result["movies_html"] = "<div class='movie-empty-state'>Movie details are temporarily unavailable.</div>"
+
         with _lock:
             results_store[plan_id].update({"status": "done", **result})
             _save_store()
     except Exception as exc:
+        logger.exception("Plan processing failed for %s", plan_id)
         with _lock:
             results_store[plan_id].update({"status": "error", "error": str(exc)})
             _save_store()
@@ -175,12 +210,20 @@ def _process(plan_id: str, query: str, intent: str) -> None:
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    missing = [k for k in ["GROQ_API_KEY", "SERPER_API_KEY"] if not os.getenv(k)]
-    if missing:
-        print(f"\n⚠  Missing environment variables: {', '.join(missing)}")
-        print("   Copy .env.example → .env and fill in the values.\n")
-        sys.exit(1)
+    if sys.platform.startswith("win"):
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except Exception:
+            pass
 
-    print("\n🎬  Entertainment Planner")
+    missing = [k for k in ["GROQ_API_KEY", "SERPER_API_KEY", "TMDB_API_KEY"] if not os.getenv(k)]
+    if missing:
+        logger.warning("Optional API keys missing; the app will run with degraded recommendations: %s", ", ".join(missing))
+
+    try:
+        print("\n🎬  Entertainment Planner")
+    except UnicodeEncodeError:
+        print("\nEntertainment Planner")
+        
     print("    http://localhost:5000/new\n")
     app.run(host="0.0.0.0", port=5000, debug=False)

@@ -4,32 +4,85 @@ Three sequential agents: Movie Expert → Music Expert → Planner.
 Only agents relevant to the user's selected intent are run.
 """
 
+import logging
 import os
-from groq import Groq
+from typing import Optional
+
+from dotenv import find_dotenv, load_dotenv
+
 from tools import search_movies, search_music
-from dotenv import load_dotenv
 
-load_dotenv()
+try:
+    from groq import Groq
+except ImportError:  # pragma: no cover - runtime fallback
+    Groq = None
 
-_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+load_dotenv(find_dotenv())
+
+logger = logging.getLogger(__name__)
+
+_client = None
+_client_error = None
+
+
+def _initialize_client():
+    global _client, _client_error
+    if Groq is None:
+        _client_error = RuntimeError("groq package is not installed")
+        logger.warning("Groq SDK is unavailable; AI generation will be disabled.")
+        return None
+
+    api_key = (os.getenv("GROQ_API_KEY") or "").strip()
+    if not api_key:
+        _client_error = RuntimeError("GROQ_API_KEY is not configured")
+        logger.warning("GROQ_API_KEY is not configured; AI generation will be disabled.")
+        return None
+
+    try:
+        return Groq(api_key=api_key)
+    except Exception as exc:  # pragma: no cover - defensive fallback
+        _client_error = exc
+        logger.warning("Groq client initialization failed: %s", exc)
+        return None
+
+
+_client = _initialize_client()
 
 # Use the best available Groq model for quality formatting
-MODEL = "llama-3.3-70b-versatile"
+MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
 
 
 # ── LLM helper ─────────────────────────────────────────────────────────────────
 
 def _call(system: str, user: str) -> str:
-    resp = _client.chat.completions.create(
-        model=MODEL,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        max_tokens=2048,
-        temperature=0.7,
-    )
-    return resp.choices[0].message.content.strip()
+    if _client is None:
+        if _client_error is not None:
+            logger.warning("Groq call skipped due to initialization error: %s", _client_error)
+        return "AI generation is currently unavailable. Please check your GROQ_API_KEY and SDK compatibility."
+
+    last_error: Optional[Exception] = None
+    for model in MODELS:
+        try:
+            resp = _client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                max_tokens=2048,
+                temperature=0.7,
+            )
+            content = getattr(resp.choices[0].message, "content", None)
+            if content:
+                return str(content).strip()
+            return "AI generation returned an empty response."
+        except Exception as exc:  # pragma: no cover - defensive fallback
+            last_error = exc
+            logger.warning("Groq request failed for model %s: %s", model, exc)
+
+    if last_error is not None:
+        logger.warning("Groq request failed after trying all fallback models: %s", last_error)
+    return "AI generation failed. Please try again shortly."
 
 
 # ── Individual agents ──────────────────────────────────────────────────────────

@@ -1,18 +1,53 @@
+import logging
 import os
-from dotenv import load_dotenv
-from groq import Groq
+
+from dotenv import find_dotenv, load_dotenv
+
 from tools import search_movies, search_music
 
-load_dotenv()
+try:
+    from groq import Groq
+except ImportError:  # pragma: no cover - runtime fallback
+    Groq = None
 
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+load_dotenv(find_dotenv())
+
+logger = logging.getLogger(__name__)
+
+
+def _build_client():
+    if Groq is None:
+        logger.warning("Groq SDK is unavailable; AI generation will be disabled.")
+        return None
+
+    api_key = (os.getenv("GROQ_API_KEY") or "").strip()
+    if not api_key:
+        logger.warning("GROQ_API_KEY is not configured; AI generation will be disabled.")
+        return None
+
+    try:
+        return Groq(api_key=api_key)
+    except Exception as exc:  # pragma: no cover - runtime fallback
+        logger.warning("Groq client initialization failed: %s", exc)
+        return None
+
+
+client = _build_client()
+
 
 def call_llm(prompt: str) -> str:
-    response = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response.choices[0].message.content
+    if client is None:
+        return "AI generation is currently unavailable. Please check your GROQ_API_KEY and SDK compatibility."
+
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.choices[0].message.content
+    except Exception as exc:  # pragma: no cover - runtime fallback
+        logger.warning("Groq request failed: %s", exc)
+        return "AI generation failed. Please try again shortly."
 
 def run_entertainment_agent(user_input: str):
     print("\n" + "="*50)
