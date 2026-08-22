@@ -25,8 +25,6 @@ python app.py
 | `SERPER_API_KEY` | https://serper.dev |
 | `TMDB_API_KEY` | https://www.themoviedb.org/settings/api |
 | `OMDB_API_KEY` | http://www.omdbapi.com/apikey.aspx |
-| `OMDB_API_KEY` | http://www.omdbapi.com/apikey.aspx |
-
 ## How it works
 
 1. User visits `/new`, picks intent (Movies / Music / Both) and types a query
