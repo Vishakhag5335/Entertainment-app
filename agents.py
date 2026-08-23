@@ -10,14 +10,14 @@ from typing import Optional
 
 from dotenv import find_dotenv, load_dotenv
 
+load_dotenv(find_dotenv())
+
 from tools import search_movies, search_music
 
 try:
     from groq import Groq
 except ImportError:  # pragma: no cover - runtime fallback
     Groq = None
-
-load_dotenv(find_dotenv())
 
 logger = logging.getLogger(__name__)
 
@@ -29,41 +29,57 @@ def _initialize_client():
     global _client, _client_error
     if Groq is None:
         _client_error = RuntimeError("groq package is not installed")
-        logger.warning("Groq SDK is unavailable; AI generation will be disabled.")
+        logger.error("Groq SDK is unavailable; groq package is not installed.")
         return None
 
+    load_dotenv(find_dotenv())
     api_key = (os.getenv("GROQ_API_KEY") or "").strip()
     if not api_key:
-        _client_error = RuntimeError("GROQ_API_KEY is not configured")
-        logger.warning("GROQ_API_KEY is not configured; AI generation will be disabled.")
+        _client_error = RuntimeError("GROQ_API_KEY is not configured in .env file")
+        logger.error("GROQ_API_KEY environment variable is not configured.")
         return None
 
     try:
-        return Groq(api_key=api_key)
+        client_inst = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        _client_error = None
+        return client_inst
     except Exception as exc:  # pragma: no cover - defensive fallback
         _client_error = exc
-        logger.warning("Groq client initialization failed: %s", exc)
+        logger.error("Groq client initialization failed: %s", exc, exc_info=True)
         return None
 
 
-_client = _initialize_client()
+def _get_client():
+    global _client
+    if _client is None:
+        _client = _initialize_client()
+    return _client
 
-# Use the best available Groq model for quality formatting
-MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+
+# Use supported Groq models starting with llama-3.3-70b-versatile
+MODELS = [
+    "llama-3.3-70b-versatile",
+    "groq/compound",
+    "groq/compound-mini",
+    "qwen/qwen3.6-27b",
+    "openai/gpt-oss-120b",
+    "llama-3.1-8b-instant",
+]
 
 
 # ── LLM helper ─────────────────────────────────────────────────────────────────
 
 def _call(system: str, user: str) -> str:
-    if _client is None:
+    client = _get_client()
+    if client is None:
         if _client_error is not None:
-            logger.warning("Groq call skipped due to initialization error: %s", _client_error)
+            logger.error("Groq call skipped due to initialization error: %s", _client_error)
         return "AI generation is currently unavailable. Please check your GROQ_API_KEY and SDK compatibility."
 
     last_error: Optional[Exception] = None
     for model in MODELS:
         try:
-            resp = _client.chat.completions.create(
+            resp = client.chat.completions.create(
                 model=model,
                 messages=[
                     {"role": "system", "content": system},
@@ -74,14 +90,15 @@ def _call(system: str, user: str) -> str:
             )
             content = getattr(resp.choices[0].message, "content", None)
             if content:
+                logger.info("Successfully generated AI response using model '%s'", model)
                 return str(content).strip()
-            return "AI generation returned an empty response."
+            logger.warning("Groq model '%s' returned an empty response.", model)
         except Exception as exc:  # pragma: no cover - defensive fallback
             last_error = exc
-            logger.warning("Groq request failed for model %s: %s", model, exc)
+            logger.error("Groq API request failed for model '%s': %s", model, exc, exc_info=True)
 
     if last_error is not None:
-        logger.warning("Groq request failed after trying all fallback models: %s", last_error)
+        logger.error("Groq request failed after trying all models. Last error: %s", last_error)
     return "AI generation failed. Please try again shortly."
 
 

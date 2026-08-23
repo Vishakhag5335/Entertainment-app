@@ -17,10 +17,10 @@ from flask import Flask, jsonify, redirect, render_template, request
 from flask_cors import CORS
 from dotenv import find_dotenv, load_dotenv
 
+load_dotenv(find_dotenv())
+
 from agents import run_plan
 from tmdb_service import build_movie_cards_html
-
-load_dotenv(find_dotenv())
 
 logging.basicConfig(
     level=logging.INFO,
@@ -137,13 +137,14 @@ def get_result(plan_id: str):
 def debug_groq():
     """Return basic Groq client and environment status for debugging."""
     try:
-        from agents import _client, _client_error
+        from agents import _get_client, _client_error
+        client = _get_client()
     except Exception as exc:  # pragma: no cover - defensive
         return jsonify({"error": f"Failed importing agents: {exc}"}), 500
 
     return jsonify({
         "GROQ_API_KEY_set": bool(os.getenv("GROQ_API_KEY")),
-        "_client": type(_client).__name__ if _client else None,
+        "_client": type(client).__name__ if client else None,
         "_client_error": str(_client_error) if _client_error else None,
     })
 

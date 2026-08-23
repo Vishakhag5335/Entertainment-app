@@ -14,40 +14,58 @@ load_dotenv(find_dotenv())
 
 logger = logging.getLogger(__name__)
 
+MODELS = [
+    "llama-3.3-70b-versatile",
+    "groq/compound",
+    "groq/compound-mini",
+    "qwen/qwen3.6-27b",
+    "openai/gpt-oss-120b",
+    "llama-3.1-8b-instant",
+]
+
 
 def _build_client():
     if Groq is None:
-        logger.warning("Groq SDK is unavailable; AI generation will be disabled.")
+        logger.error("Groq SDK is unavailable; groq package is not installed.")
         return None
 
+    load_dotenv(find_dotenv())
     api_key = (os.getenv("GROQ_API_KEY") or "").strip()
     if not api_key:
-        logger.warning("GROQ_API_KEY is not configured; AI generation will be disabled.")
+        logger.error("GROQ_API_KEY environment variable is not configured.")
         return None
 
     try:
-        return Groq(api_key=api_key)
+        return Groq(api_key=os.getenv("GROQ_API_KEY"))
     except Exception as exc:  # pragma: no cover - runtime fallback
-        logger.warning("Groq client initialization failed: %s", exc)
+        logger.error("Groq client initialization failed: %s", exc, exc_info=True)
         return None
-
-
-client = _build_client()
 
 
 def call_llm(prompt: str) -> str:
+    client = _build_client()
     if client is None:
         return "AI generation is currently unavailable. Please check your GROQ_API_KEY and SDK compatibility."
 
-    try:
-        response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return response.choices[0].message.content
-    except Exception as exc:  # pragma: no cover - runtime fallback
-        logger.warning("Groq request failed: %s", exc)
-        return "AI generation failed. Please try again shortly."
+    last_error = None
+    for model in MODELS:
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            content = getattr(response.choices[0].message, "content", None)
+            if content:
+                logger.info("Successfully generated AI response using model '%s'", model)
+                return str(content).strip()
+            logger.warning("Groq model '%s' returned an empty response.", model)
+        except Exception as exc:  # pragma: no cover - runtime fallback
+            last_error = exc
+            logger.error("Groq API request failed for model '%s': %s", model, exc, exc_info=True)
+
+    if last_error is not None:
+        logger.error("Groq request failed after trying all models. Last error: %s", last_error)
+    return "AI generation failed. Please try again shortly."
 
 def run_entertainment_agent(user_input: str):
     print("\n" + "="*50)
